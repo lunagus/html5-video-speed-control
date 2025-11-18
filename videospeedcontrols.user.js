@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HTML5 Video Speed Controls
-// @namespace    http://tampermonkey.net/
-// @version      1.0
+// @namespace    https://github.com/lunagus/html5-video-speed-control
+// @version      1.1
 // @description  Simple keyboard controls for HTML5 video speed and frame-stepping
 // @author       lunagus
 // @match        *://*/*
@@ -15,7 +15,7 @@
     const SPEED_STEP = 0.1;
     let activeVideo = null;
 
-    // UI tooltip system (from original script style)
+    // UI tooltip system
     let tooltipElement = null;
     let tooltipTimer = null;
 
@@ -54,17 +54,15 @@
         }, 1500);
     }
 
-    // Smart video detection - prioritizes playing, visible, and largest videos
+    // Smart video detection
     function findBestVideo() {
         const videos = Array.from(document.querySelectorAll('video'));
         if (videos.length === 0) return null;
         if (videos.length === 1) return videos[0];
 
-        // Prioritize currently playing video
         const playing = videos.find(v => !v.paused);
         if (playing) return playing;
 
-        // Find largest visible video
         return videos.reduce((best, current) => {
             const rect = current.getBoundingClientRect();
             const area = rect.width * rect.height;
@@ -74,28 +72,24 @@
         });
     }
 
-    // Dynamic FPS calculation (from provided script - more accurate)
     function estimateFPS(video) {
-        let fps = 30; // default
+        let fps = 30;
         try {
             const quality = video.getVideoPlaybackQuality();
             if (quality && video.currentTime > 0 && quality.totalVideoFrames > 0) {
                 fps = quality.totalVideoFrames / video.currentTime;
             }
-        } catch (err) {
-            // getVideoPlaybackQuality not supported, use default
-        }
+        } catch (err) {}
         return fps;
     }
 
-    // Frame stepping
     function stepFrame(video, direction) {
         if (!video || !video.duration) return;
-        
+
         video.pause();
         const fps = estimateFPS(video);
         const frameDuration = 1 / fps;
-        
+
         if (direction < 0) {
             video.currentTime = Math.max(0, video.currentTime - frameDuration);
         } else {
@@ -103,7 +97,6 @@
         }
     }
 
-    // Update active video reference
     function updateActiveVideo() {
         const newVideo = findBestVideo();
         if (newVideo) {
@@ -111,57 +104,53 @@
         }
     }
 
-    // Keyboard event handler
     function handleKeyPress(e) {
-        // Ignore if typing in input fields
         const target = e.target;
-        if (target && (target.tagName === 'INPUT' || 
-                       target.tagName === 'TEXTAREA' || 
+        if (target && (target.tagName === 'INPUT' ||
+                       target.tagName === 'TEXTAREA' ||
                        target.isContentEditable)) {
             return;
         }
 
-        // Update active video if needed
+        if (e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) {
+            return;
+        }
+
         if (!activeVideo || !activeVideo.isConnected) {
             updateActiveVideo();
         }
-        
+
         if (!activeVideo) return;
 
         let handled = false;
         let message = '';
 
-        switch(e.key.toLowerCase()) {
+        switch (e.key.toLowerCase()) {
             case 'x':
-                // Decrease speed
                 activeVideo.playbackRate = Math.max(0.1, activeVideo.playbackRate - SPEED_STEP);
                 message = `Speed: ${activeVideo.playbackRate.toFixed(1)}x`;
                 handled = true;
                 break;
 
             case 'c':
-                // Increase speed
                 activeVideo.playbackRate = Math.min(16, activeVideo.playbackRate + SPEED_STEP);
                 message = `Speed: ${activeVideo.playbackRate.toFixed(1)}x`;
                 handled = true;
                 break;
 
             case 'z':
-                // Reset speed
                 activeVideo.playbackRate = 1.0;
                 message = 'Speed: 1.0x (Reset)';
                 handled = true;
                 break;
 
             case 'q':
-                // Previous frame
                 stepFrame(activeVideo, -1);
                 message = '◄ Previous Frame';
                 handled = true;
                 break;
 
             case 'e':
-                // Next frame
                 stepFrame(activeVideo, 1);
                 message = 'Next Frame ►';
                 handled = true;
@@ -175,31 +164,25 @@
         }
     }
 
-    // Initialize
     function init() {
-        // Initial video detection
         updateActiveVideo();
 
-        // Listen for keyboard events (capture phase)
         document.addEventListener('keydown', handleKeyPress, true);
 
-        // Update active video when videos play
         document.addEventListener('play', (e) => {
             if (e.target instanceof HTMLVideoElement) {
                 activeVideo = e.target;
             }
         }, true);
 
-        // Observe for dynamically added videos
         const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
                 for (const node of mutation.addedNodes) {
                     if (!(node instanceof Element)) continue;
-                    
+
                     if (node.tagName === 'VIDEO') {
                         updateActiveVideo();
                     } else {
-                        // Check for nested videos
                         const videos = node.querySelectorAll?.('video');
                         if (videos && videos.length > 0) {
                             updateActiveVideo();
@@ -215,7 +198,6 @@
         });
     }
 
-    // Wait for body to be available
     if (document.body) {
         init();
     } else {
